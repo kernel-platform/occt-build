@@ -2,8 +2,8 @@
 
 Reproducible builds of the Open CASCADE Technology (OCCT) shared libraries. This
 repository holds the pinned upstream source reference, the build scripts, and the prebuilt
-shared libraries for Linux x86_64/aarch64 and macOS arm64. OCCT is distributed under LGPL-2.1 with the Open CASCADE
-Exception.
+shared libraries for Linux x86_64/aarch64 and macOS arm64. OCCT is distributed under
+LGPL-2.1 with the Open CASCADE Exception.
 
 The OCCT we build is unmodified. `patches/<version>/` is empty until a release says
 otherwise.
@@ -15,10 +15,6 @@ otherwise.
 | OCCT | 7.8.1: upstream tag [`V7_8_1`](https://github.com/Open-Cascade-SAS/OCCT/tree/V7_8_1), commit `bd2a789f15235755ce4d1a3b07379a2e062fdc2e` |
 | Build | `kernel.1` (`versions/7.8.1.env`) |
 | Library type | Shared only. A release never contains a static `.a` library. |
-
-**Status:** the build scripts are in place and have been checked locally on macOS arm64
-and in the Linux container on aarch64. The release workflow comes next. No release has
-been published yet.
 
 ## Releases
 
@@ -35,6 +31,17 @@ Each tag `v<occt-version>-kernel.<n>` publishes a GitHub Release with these asse
 
 `BUILDINFO.json` records the OCCT commit, the build number, the compiler, the CMake cache,
 the container digest (Linux) and the deployment target (macOS).
+
+The workflow `.github/workflows/release.yml` builds every platform on GitHub-hosted runners
+when a `v*-kernel.*` tag is pushed:
+
+- Linux x86_64 and aarch64 build inside `docker/linux.Dockerfile`;
+- macOS arm64 builds on `macos-15`.
+
+It then creates a **draft** release with all assets and `SHA256SUMS`. A maintainer
+reviews the draft and publishes it. A `workflow_dispatch` run builds the same assets as
+run artifacts, without creating a release. Only people with write access can push tags or
+dispatch the workflow.
 
 Releases are never deleted or overwritten. Immutable releases are enabled.
 
