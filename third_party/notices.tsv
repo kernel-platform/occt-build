@@ -1,0 +1,17 @@
+# Files in the OCCT source tree that carry a license other than OCCT's own.
+# scripts/check_licenses.sh source fails when the scan finds a file not listed here,
+# so every new third-party file is reviewed on a version bump.
+# path<TAB>toolkit<TAB>license<TAB>built<TAB>note
+src/BRepMesh/delabella.cpp	TKMesh	MIT	yes	Delabella, (C) 2018 GUMIX - Marcin Sokalski
+src/BRepMesh/delabella.pxx	TKMesh	MIT	yes	Delabella, (C) 2018 GUMIX - Marcin Sokalski
+src/FlexLexer/FlexLexer.h	TKernel	BSD-3-Clause	yes	(c) 1993 The Regents of the University of California
+src/ExprIntrp/ExprIntrp.tab.c	TKMath	GPL-3.0-or-later WITH Bison-exception-2.2	yes	Bison parser skeleton; the exception permits any terms
+src/ExprIntrp/ExprIntrp.tab.h	TKMath	GPL-3.0-or-later WITH Bison-exception-2.2	yes	Bison parser skeleton; the exception permits any terms
+src/StepFile/step.tab.cxx	TKDESTEP	GPL-3.0-or-later WITH Bison-exception-2.2	yes	Bison parser skeleton; the exception permits any terms
+src/StepFile/step.tab.hxx	TKDESTEP	GPL-3.0-or-later WITH Bison-exception-2.2	yes	Bison parser skeleton; the exception permits any terms
+src/Font/Font_DejavuSans_Latin_woff.pxx	TKService	Bitstream-Vera	tbd	embedded DejaVu Sans font; shipped only if TKService is built
+src/ExpToCasExe/exptocas.tab.cxx	-	GPL-3.0-or-later WITH Bison-exception-2.2	no	EXPRESS-to-C++ generator executable, not built
+src/ExpToCasExe/exptocas.tab.hxx	-	GPL-3.0-or-later WITH Bison-exception-2.2	no	EXPRESS-to-C++ generator executable, not built
+src/OpenGl/OpenGl_HaltonSampler.hxx	TKOpenGl	MIT	no	(c) 2012 Leonhard Gruenschloss
+src/OpenGl/OpenGl_glext.h	TKOpenGl	MIT	no	(c) The Khronos Group Inc.
+src/OpenGl/OpenGl_khrplatform.h	TKOpenGl	MIT	no	(c) The Khronos Group Inc.

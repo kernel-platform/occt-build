@@ -1,0 +1,46 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  licenses:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shellcheck
+        run: shellcheck scripts/*.sh
+
+      - name: Version files are complete
+        run: |
+          for env in versions/*.env; do
+            for key in OCCT_VERSION OCCT_REPO OCCT_TAG OCCT_COMMIT KERNEL_BUILD; do
+              grep -q "^${key}=." "$env" || { echo "$env: missing $key"; exit 1; }
+            done
+            v="$(basename "$env" .env)"
+            grep -qx "OCCT_VERSION=$v" "$env" || { echo "$env: OCCT_VERSION != $v"; exit 1; }
+            [ -d "patches/$v" ] || { echo "patches/$v missing"; exit 1; }
+          done
+
+      - name: License texts match upstream
+        run: |
+          for env in versions/*.env; do
+            scripts/check_licenses.sh root "$(basename "$env" .env)"
+          done
+
+      - name: Third-party registry covers the source tree
+        run: |
+          for env in versions/*.env; do
+            # shellcheck disable=SC1090
+            source "$env"
+            git init -q "src-$OCCT_VERSION"
+            git -C "src-$OCCT_VERSION" fetch -q --depth 1 "$OCCT_REPO" "$OCCT_COMMIT"
+            git -C "src-$OCCT_VERSION" checkout -q FETCH_HEAD
+            scripts/check_licenses.sh source "src-$OCCT_VERSION"
+          done
