@@ -1,0 +1,129 @@
+name: release
+
+# A tag v<occt-version>-kernel.<n> builds every platform and creates a DRAFT
+# GitHub Release; a maintainer reviews the assets and publishes it (releases
+# are immutable once published). workflow_dispatch runs the same build for a
+# version without a tag, creating nothing: the assets stay as run artifacts.
+
+on:
+  push:
+    tags: ["v*-kernel.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "OCCT version (versions/<version>.env)"
+        required: true
+        default: "7.8.1"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            version="${REF_NAME#v}"; version="${version%%-kernel.*}"
+          else
+            version="$INPUT_VERSION"
+          fi
+          # shellcheck disable=SC1090
+          source "versions/${version}.env"
+          release="${OCCT_VERSION}-kernel.${KERNEL_BUILD}"
+          if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v${release}" ]; then
+            echo "tag $REF_NAME does not match versions/${version}.env (v${release})"; exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+
+  source:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check_licenses.sh root "${{ needs.resolve.outputs.version }}"
+      - run: scripts/fetch_source.sh "${{ needs.resolve.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: |
+            dist/occt-*-src.tar.gz
+            dist/occt-build-*.tar.gz
+
+  build:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - platform: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (Linux, pinned container)
+        if: startsWith(matrix.platform, 'linux-')
+        run: |
+          docker build -f docker/linux.Dockerfile -t occt-build-linux .
+          docker run --rm -v "$PWD:/w" -w /w -e VERSION occt-build-linux sh -c \
+            'scripts/fetch_source.sh "$VERSION" && scripts/build.sh "$VERSION" && scripts/package.sh "$VERSION"'
+
+      - name: Build (macOS)
+        if: startsWith(matrix.platform, 'macos-')
+        run: |
+          command -v ninja || brew install ninja
+          scripts/fetch_source.sh "$VERSION"
+          scripts/build.sh "$VERSION"
+          scripts/package.sh "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: |
+            dist/occt-*-${{ matrix.platform }}.tar.gz
+            dist/occt-*-${{ matrix.platform }}.cdx.json
+
+  release:
+    needs: [resolve, source, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        run: cd assets && sha256sum -- * | tee SHA256SUMS
+      - name: Draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.resolve.outputs.release }}
+        run: |
+          gh release create "v${RELEASE}" assets/* --repo "$GITHUB_REPOSITORY" --draft \
+            --title "OCCT ${RELEASE}" \
+            --notes "Open CASCADE Technology built from the upstream commit pinned in versions/, see BUILDINFO.json in each platform archive. The -src archive is the exact source built; occt-build-*.tar.gz holds the build scripts. OCCT is LGPL-2.1 with the Open CASCADE Exception."
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type != 'tag'
+        with:
+          name: release-assets
+          path: assets/
