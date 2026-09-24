@@ -20,6 +20,7 @@ detect_platform() {
   case "$(uname -s)" in
     Linux) os=linux ;;
     Darwin) os=macos ;;
+    MINGW* | MSYS* | CYGWIN*) os=windows ;;
     *) echo "unsupported OS $(uname -s)" >&2; exit 1 ;;
   esac
   case "$(uname -m)" in
@@ -35,4 +36,23 @@ detect_platform() {
 
 jobs() {
   if command -v nproc >/dev/null; then nproc; else sysctl -n hw.ncpu; fi
+}
+
+# The Python interpreter: python3, or python on Windows runners.
+PY="$(command -v python3 || command -v python || true)"
+
+sha256() {
+  if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1
+}
+
+is_windows() { [ "${PLATFORM%%-*}" = windows ]; }
+
+# has_toolkit <stage> <toolkit>: the stage contains that toolkit's shared
+# library (lib/libTK*.so|dylib on Unix, bin/TK*.dll on Windows).
+has_toolkit() {
+  local f
+  for f in "$1/lib/lib$2."* "$1/bin/$2.dll"; do
+    [ -e "$f" ] && return 0
+  done
+  return 1
 }

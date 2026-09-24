@@ -12,6 +12,8 @@ load_version "$1"
 rm -rf "$SRC_DIR"
 mkdir -p "$SRC_DIR" "$DIST_DIR"
 git -C "$SRC_DIR" init -q
+# Upstream bytes on every platform: no CRLF conversion on Windows checkouts.
+git -C "$SRC_DIR" config core.autocrlf false
 git -C "$SRC_DIR" fetch -q --depth 1 "$OCCT_REPO" "$OCCT_COMMIT"
 git -C "$SRC_DIR" checkout -q FETCH_HEAD
 head="$(git -C "$SRC_DIR" rev-parse HEAD)"

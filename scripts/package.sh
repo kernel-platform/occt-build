@@ -23,8 +23,8 @@ fi
 tar -C "$(dirname "$STAGE_DIR")" -cf - "${tar_flags[@]}" -T "$ROOT/work/${PKG_NAME}.list" \
   | gzip -n -9 > "$tarball"
 
-sha="$(shasum -a 256 "$tarball" | cut -d' ' -f1)"
-python3 - "$DIST_DIR/${PKG_NAME}.cdx.json" <<PY
+sha="$(sha256 "$tarball")"
+"$PY" - "$DIST_DIR/${PKG_NAME}.cdx.json" <<PY
 import json, sys
 bom = {
     "bomFormat": "CycloneDX",

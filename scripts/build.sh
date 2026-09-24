@@ -23,9 +23,15 @@ cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
 cmake --build "$BUILD_DIR" --parallel "$(jobs)"
 cmake --install "$BUILD_DIR"
 
-# Keep lib/, include/, lib/cmake and the runtime resources. bin/ holds only
-# environment scripts with build-machine paths.
-rm -rf "${STAGE_DIR:?}/bin" "${STAGE_DIR:?}/share/doc"
+# Keep lib/, include/, lib/cmake and the runtime resources. On Unix bin/ holds
+# only environment scripts with build-machine paths; on Windows it holds the
+# DLLs, so only those scripts go.
+if is_windows; then
+  rm -f "${STAGE_DIR:?}"/*.bat "${STAGE_DIR:?}"/bin/*.bat "${STAGE_DIR:?}"/bin/*.sh
+else
+  rm -rf "${STAGE_DIR:?}/bin"
+fi
+rm -rf "${STAGE_DIR:?}/share/doc"
 
 # License texts, from the source tree that was built (never from this repo's root).
 lic="$STAGE_DIR/licenses"
@@ -36,7 +42,7 @@ cp "$ROOT/NOTICE.md" "$lic/"
 while IFS=$'\t' read -r path toolkit license _built _; do
   case "$path" in '#'* | '') continue ;; esac
   [ "$toolkit" != - ] || continue
-  ls "$STAGE_DIR/lib/lib${toolkit}."* >/dev/null 2>&1 || continue
+  has_toolkit "$STAGE_DIR" "$toolkit" || continue
   out="$lic/third_party/$(basename "$path").txt"
   {
     echo "From $path (OCCT toolkit $toolkit), license: $license"
@@ -55,10 +61,14 @@ done < "$ROOT/third_party/notices.tsv"
 
 cxx_id="$(sed -n 's/^set(CMAKE_CXX_COMPILER_ID "\(.*\)")$/\1/p' "$BUILD_DIR"/CMakeFiles/*/CMakeCXXCompiler.cmake | head -1)"
 cxx="$(sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt")"
-cxx_version="$("$cxx" --version | head -1)"
+if [ "$cxx_id" = MSVC ]; then
+  cxx_version="$("$cxx" 2>&1 >/dev/null | head -1 | tr -d '\r')"  # cl prints its banner on stderr
+else
+  cxx_version="$("$cxx" --version | head -1)"
+fi
 cxx_flags="$(sed -n 's/^CMAKE_CXX_FLAGS:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt")"
-python3 - "$STAGE_DIR/BUILDINFO.json" <<PY
-import json, sys
+"$PY" - "$STAGE_DIR/BUILDINFO.json" "$ROOT/patches/$OCCT_VERSION" <<PY
+import json, os, sys
 info = {
     "release": "${RELEASE}",
     "platform": "${PLATFORM}",
@@ -66,7 +76,7 @@ info = {
     "occt_repo": "${OCCT_REPO}",
     "occt_tag": "${OCCT_TAG}",
     "occt_commit": "${OCCT_COMMIT}",
-    "patches": sorted(f for f in __import__("os").listdir("${ROOT}/patches/${OCCT_VERSION}") if f.endswith(".patch")),
+    "patches": sorted(f for f in os.listdir(sys.argv[2]) if f.endswith(".patch")),
     "occt_build_commit": "$(git -C "$ROOT" rev-parse HEAD)",
     "occt_build_dirty": $([ -z "$(git -C "$ROOT" status --porcelain)" ] && echo False || echo True),
     "compiler": "${cxx_id}",

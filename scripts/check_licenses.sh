@@ -83,19 +83,40 @@ check_package() {
   [ -s "$stage/BUILDINFO.json" ] || { echo "missing BUILDINFO.json"; status=1; }
   while IFS=$'\t' read -r path toolkit _license _built _; do
     case "$path" in '#'* | '') continue ;; esac
-    ls "$stage/lib/lib${toolkit}."* >/dev/null 2>&1 || continue
+    local built=0 f
+    for f in "$stage/lib/lib${toolkit}."* "$stage/bin/${toolkit}.dll"; do
+      [ -e "$f" ] && built=1
+    done
+    [ "$built" = 1 ] || continue
     [ -s "$stage/licenses/third_party/$(basename "$path").txt" ] \
       || { echo "missing third-party notice for $path ($toolkit)"; status=1; }
   done < third_party/notices.tsv
 
+  local windows=0
+  [ -n "$(find "$stage/bin" -maxdepth 1 -name 'TK*.dll' 2>/dev/null)" ] && windows=1
+
   if find "$stage" -name '*.a' | grep -q .; then
     echo "static libraries present:"; find "$stage" -name '*.a'; status=1
   fi
+  if [ "$windows" = 1 ]; then
+    # On Windows a .lib is either an import library or a static one. Every
+    # lib/TK*.lib must be the import library of a bin/TK*.dll.
+    local implib
+    while read -r implib; do
+      [ -f "$stage/bin/$(basename "$implib" .lib).dll" ] \
+        || { echo "$(basename "$implib") has no matching DLL (static library?)"; status=1; }
+    done < <(find "$stage/lib" -maxdepth 1 -name '*.lib')
+  fi
 
   local got want
-  got="$(find "$stage/lib" -maxdepth 1 \( -name 'libTK*.so' -o -name 'libTK*.dylib' \) \
-          | grep -E '/libTK[A-Za-z0-9]+[.](so|dylib)$' \
-          | sed -E 's%.*/lib(TK[A-Za-z0-9]+)[.](so|dylib)$%\1%' | sort -u | tr '\n' ' ')"
+  if [ "$windows" = 1 ]; then
+    got="$(find "$stage/bin" -maxdepth 1 -name 'TK*.dll' | sed -E 's%.*/(TK[A-Za-z0-9]+)[.]dll$%\1%' \
+            | sort -u | tr '\n' ' ')"
+  else
+    got="$(find "$stage/lib" -maxdepth 1 \( -name 'libTK*.so' -o -name 'libTK*.dylib' \) \
+            | grep -E '/libTK[A-Za-z0-9]+[.](so|dylib)$' \
+            | sed -E 's%.*/lib(TK[A-Za-z0-9]+)[.](so|dylib)$%\1%' | sort -u | tr '\n' ' ')"
+  fi
   want="$(tr ' ' '\n' <<<"$OCCT_TOOLKITS" | grep . | sort -u | tr '\n' ' ')"
   [ "$got" = "$want" ] || { echo "toolkits differ from versions/$1.env"; \
     diff <(tr ' ' '\n' <<<"$want") <(tr ' ' '\n' <<<"$got") || true; status=1; }
@@ -103,7 +124,13 @@ check_package() {
   # Dependencies of every real library file: other TK libraries and the system.
   local lib deps
   while read -r lib; do
-    if [ "$(uname -s)" = Darwin ]; then
+    if [ "$windows" = 1 ]; then
+      # System DLLs (Windows API sets included) and the MSVC runtime, which the
+      # application ships through Microsoft's redistributable.
+      deps="$(dumpbin -nologo -dependents "$lib" | tr -d '\r' | grep -i -E '^ +[^ ]+\.dll$' \
+        | awk '{print $1}' \
+        | grep -v -i -E '^TK[A-Za-z0-9]+\.dll$|^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|ws2_32|wsock32|winmm|psapi|dbghelp|comdlg32|shlwapi|version|bcrypt|crypt32|secur32|imm32|opengl32|ucrtbase|vcruntime140|vcruntime140_1|msvcp140|msvcp140_1|msvcp140_2|concrt140)\.dll$|^api-ms-win-' || true)"
+    elif [ "$(uname -s)" = Darwin ]; then
       deps="$(otool -L "$lib" | tail -n +2 | awk '{print $1}' \
         | grep -v -E '^@rpath/libTK|^/usr/lib/lib(System\.B|c\+\+\.1|objc\.A)\.dylib$|^/System/Library/Frameworks/' || true)"
     else
@@ -111,7 +138,8 @@ check_package() {
         | grep -v -E '^libTK|^lib(c|m|dl|rt|pthread|stdc\+\+|gcc_s)\.so|^ld-linux' || true)"
     fi
     [ -z "$deps" ] || { echo "$(basename "$lib") links non-system libraries: $deps"; status=1; }
-  done < <(find "$stage/lib" -maxdepth 1 -type f \( -name 'libTK*.so.*' -o -name 'libTK*.dylib' \))
+  done < <(find "$stage/lib" "$stage/bin" -maxdepth 1 -type f \
+             \( -name 'libTK*.so.*' -o -name 'libTK*.dylib' -o -name 'TK*.dll' \) 2>/dev/null)
 
   [ "$status" -eq 0 ] || die "package check failed for $stage"
   echo "OK: $stage has its licenses, only shared system-linked libraries, and the expected toolkits."

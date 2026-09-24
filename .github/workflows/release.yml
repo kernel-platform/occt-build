@@ -72,6 +72,8 @@ jobs:
             runner: ubuntu-24.04-arm
           - platform: macos-arm64
             runner: macos-15
+          - platform: windows-x86_64
+            runner: windows-2022
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 300
     env:
@@ -94,6 +96,24 @@ jobs:
           scripts/build.sh "$VERSION"
           scripts/package.sh "$VERSION"
 
+      - name: MSVC environment (Windows)
+        if: startsWith(matrix.platform, 'windows-')
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build (Windows, MSVC)
+        if: startsWith(matrix.platform, 'windows-')
+        shell: bash
+        run: |
+          command -v ninja || choco install ninja --no-progress -y
+          # Git Bash's /usr/bin/link would shadow MSVC's link.exe.
+          PATH="$(dirname "$(command -v cl)"):$PATH"
+          export PATH
+          scripts/fetch_source.sh "$VERSION"
+          scripts/build.sh "$VERSION"
+          scripts/package.sh "$VERSION"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
@@ -111,6 +131,20 @@ jobs:
         with:
           path: assets
           merge-multiple: true
+      - name: Every platform archive carries its licenses
+        run: |
+          status=0
+          for t in assets/occt-[0-9]*.tar.gz; do
+            case "$t" in *-src.tar.gz) continue ;; esac
+            list="$(tar -tzf "$t")"
+            for f in LICENSE_LGPL_21.txt OCCT_LGPL_EXCEPTION.txt NOTICE.md; do
+              grep -q "/licenses/$f\$" <<<"$list" || { echo "$t: missing licenses/$f"; status=1; }
+            done
+            grep -q '/licenses/third_party/.*\.txt$' <<<"$list" \
+              || { echo "$t: no third-party notices"; status=1; }
+          done
+          exit "$status"
+
       - name: Checksums
         run: cd assets && sha256sum -- * | tee SHA256SUMS
       - name: Draft release
