@@ -50,5 +50,9 @@ is_windows() { [ "${PLATFORM%%-*}" = windows ]; }
 # has_toolkit <stage> <toolkit>: the stage contains that toolkit's shared
 # library (lib/libTK*.so|dylib on Unix, bin/TK*.dll on Windows).
 has_toolkit() {
-  ls "$1/lib/lib$2."* "$1/bin/$2.dll" >/dev/null 2>&1
+  local f
+  for f in "$1/lib/lib$2."* "$1/bin/$2.dll"; do
+    [ -e "$f" ] && return 0
+  done
+  return 1
 }

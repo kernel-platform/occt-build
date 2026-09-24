@@ -83,7 +83,11 @@ check_package() {
   [ -s "$stage/BUILDINFO.json" ] || { echo "missing BUILDINFO.json"; status=1; }
   while IFS=$'\t' read -r path toolkit _license _built _; do
     case "$path" in '#'* | '') continue ;; esac
-    ls "$stage/lib/lib${toolkit}."* "$stage/bin/${toolkit}.dll" >/dev/null 2>&1 || continue
+    local built=0 f
+    for f in "$stage/lib/lib${toolkit}."* "$stage/bin/${toolkit}.dll"; do
+      [ -e "$f" ] && built=1
+    done
+    [ "$built" = 1 ] || continue
     [ -s "$stage/licenses/third_party/$(basename "$path").txt" ] \
       || { echo "missing third-party notice for $path ($toolkit)"; status=1; }
   done < third_party/notices.tsv
