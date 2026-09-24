@@ -131,6 +131,20 @@ jobs:
         with:
           path: assets
           merge-multiple: true
+      - name: Every platform archive carries its licenses
+        run: |
+          status=0
+          for t in assets/occt-[0-9]*.tar.gz; do
+            case "$t" in *-src.tar.gz) continue ;; esac
+            list="$(tar -tzf "$t")"
+            for f in LICENSE_LGPL_21.txt OCCT_LGPL_EXCEPTION.txt NOTICE.md; do
+              grep -q "/licenses/$f\$" <<<"$list" || { echo "$t: missing licenses/$f"; status=1; }
+            done
+            grep -q '/licenses/third_party/.*\.txt$' <<<"$list" \
+              || { echo "$t: no third-party notices"; status=1; }
+          done
+          exit "$status"
+
       - name: Checksums
         run: cd assets && sha256sum -- * | tee SHA256SUMS
       - name: Draft release
