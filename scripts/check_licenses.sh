@@ -125,7 +125,7 @@ check_package() {
       # application ships through Microsoft's redistributable.
       deps="$(dumpbin -nologo -dependents "$lib" | tr -d '\r' | grep -i -E '^ +[^ ]+\.dll$' \
         | awk '{print $1}' \
-        | grep -v -i -E '^TK[A-Za-z0-9]+\.dll$|^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|ws2_32|winmm|psapi|dbghelp|comdlg32|shlwapi|version|bcrypt|crypt32|secur32|imm32|opengl32|ucrtbase|vcruntime140|vcruntime140_1|msvcp140|msvcp140_1|msvcp140_2|concrt140)\.dll$|^api-ms-win-' || true)"
+        | grep -v -i -E '^TK[A-Za-z0-9]+\.dll$|^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|ws2_32|wsock32|winmm|psapi|dbghelp|comdlg32|shlwapi|version|bcrypt|crypt32|secur32|imm32|opengl32|ucrtbase|vcruntime140|vcruntime140_1|msvcp140|msvcp140_1|msvcp140_2|concrt140)\.dll$|^api-ms-win-' || true)"
     elif [ "$(uname -s)" = Darwin ]; then
       deps="$(otool -L "$lib" | tail -n +2 | awk '{print $1}' \
         | grep -v -E '^@rpath/libTK|^/usr/lib/lib(System\.B|c\+\+\.1|objc\.A)\.dylib$|^/System/Library/Frameworks/' || true)"
